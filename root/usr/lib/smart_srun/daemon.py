@@ -27,6 +27,7 @@ from config import (
 )
 from network import (
     HTTP_EXCEPTIONS,
+    resolve_bind_ip,
 )
 from wireless import (
     build_expected_profile,
@@ -270,9 +271,11 @@ def _daemon_tick_quiet(cfg, state, interval):
     return message, min(interval, 60)
 
 
-def _daemon_tick_active(cfg, state, interval):
+def _daemon_tick_active(cfg, state, interval, app_ctx=None):
     online_interval = interval
     mode_msg = ""
+    app_ctx = app_ctx or school_runtime.build_app_context(cfg)
+    runtime = app_ctx["runtime"]
 
     if state["was_in_quiet"]:
         log("INFO", "quiet_exit", "leaving quiet hours, switching back to campus")
@@ -311,15 +314,17 @@ def _daemon_tick_active(cfg, state, interval):
             message = message + "；" + mode_msg
         return message, interval
 
-    srun_profile = srun_auth.get_profile(cfg)
     next_sleep = interval
     try:
-        urls = srun_auth.build_urls(cfg)
+        urls = runtime.build_urls(cfg["base_url"])
+        bind_ip = resolve_bind_ip(urls["init_url"], cfg)
         online_now = False
         status_message = ""
         if cfg["username"]:
-            online_now, status_message = srun_auth.query_online_status(
-                srun_profile, urls["rad_user_info_api"], cfg["username"]
+            online_now, status_message = runtime.query_online_status(
+                app_ctx,
+                expected_username=cfg["username"],
+                bind_ip=bind_ip,
             )
 
         if online_now:
@@ -450,7 +455,7 @@ def run_daemon(runtime=None):
         if in_quiet_window(cfg):
             message, sleep = _daemon_tick_quiet(cfg, state, interval)
         else:
-            message, sleep = _daemon_tick_active(cfg, state, interval)
+            message, sleep = _daemon_tick_active(cfg, state, interval, app_ctx=app_ctx)
 
         log("INFO", "daemon_tick", message)
         save_runtime_status(

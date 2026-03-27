@@ -39,6 +39,7 @@ def build_runtime_snapshot(cfg, state=None):
     previous = state if state is not None else load_runtime_state()
     wired_mode = campus_uses_wired(cfg)
     wan_ip = get_ipv4_from_network_interface("wan") if wired_mode else None
+    wired_bind_ip = wan_ip if wired_mode and wan_ip else None
     wired_online = False
 
     if wired_mode and wan_ip:
@@ -86,7 +87,9 @@ def build_runtime_snapshot(cfg, state=None):
     if cfg.get("username") and wired_mode and wan_ip:
         try:
             online_now, online_user, _ = runtime.query_online_identity(
-                app_ctx, expected_username=cfg.get("username", ""), bind_ip=wan_ip
+                app_ctx,
+                expected_username=cfg.get("username", ""),
+                bind_ip=wired_bind_ip,
             )
             if online_now and online_user:
                 wired_online = True
@@ -94,7 +97,7 @@ def build_runtime_snapshot(cfg, state=None):
         except Exception:
             wired_online = False
 
-    if wired_online:
+    if wired_mode and wan_ip:
         mode = "campus"
     elif ssid == str(cfg.get("hotspot_ssid", "")).strip() and ssid:
         mode = "hotspot"
@@ -106,7 +109,9 @@ def build_runtime_snapshot(cfg, state=None):
     if mode != "hotspot" and cfg.get("username") and not wired_online:
         try:
             online_now, online_user, _ = runtime.query_online_identity(
-                app_ctx, expected_username=cfg.get("username", "")
+                app_ctx,
+                expected_username=cfg.get("username", ""),
+                bind_ip=wired_bind_ip,
             )
             if online_now and online_user:
                 online_account_label = online_user
