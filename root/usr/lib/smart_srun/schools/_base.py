@@ -128,8 +128,11 @@ class SchoolProfile:
     def parse_login_response(self, data):
         error = str(data.get("error", "")).lower()
         result = str(data.get("res", "")).lower()
-        success = error == "ok" or result == "ok"
         message = data.get("error_msg") or data.get("error") or "unknown response"
+        message_text = str(message).strip().lower()
+        success = error == "ok" or result == "ok"
+        if (not success) and ("you are already online" in message_text):
+            return True, "已在线"
         return success, str(message)
 
     def build_logout_params(self, cfg, ip):
