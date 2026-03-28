@@ -97,7 +97,7 @@ def build_runtime_snapshot(cfg, state=None):
         except Exception:
             wired_online = False
 
-    if wired_mode and wan_ip:
+    if wired_online:
         mode = "campus"
     elif ssid == str(cfg.get("hotspot_ssid", "")).strip() and ssid:
         mode = "hotspot"

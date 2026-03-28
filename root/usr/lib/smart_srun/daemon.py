@@ -8,6 +8,7 @@ import time
 
 from config import (
     ACTION_FILE,
+    DISCONNECT_RETRY_DELAY_SECONDS,
     LOG_FILE,
     append_log,
     build_school_runtime_luci_contract,
@@ -332,6 +333,42 @@ def _daemon_tick_active(cfg, state, interval, app_ctx=None):
             state["was_online"] = True
             next_sleep = online_interval
         else:
+            if state["was_online"] and campus_uses_wired(cfg):
+                retry_delay = max(int(DISCONNECT_RETRY_DELAY_SECONDS), 0)
+                if retry_delay > 0:
+                    time.sleep(retry_delay)
+                try:
+                    online_retry, retry_message = runtime.query_online_status(
+                        app_ctx,
+                        expected_username=cfg["username"],
+                        bind_ip=bind_ip,
+                    )
+                    if online_retry:
+                        message = "在线，已忽略一次有线状态抖动"
+                        state["was_online"] = True
+                        next_sleep = online_interval
+                        if mode_msg:
+                            message = message + "；" + mode_msg
+                        return message, next_sleep
+                    if retry_message:
+                        status_message = retry_message
+                except Exception:
+                    pass
+
+                snapshot = build_runtime_snapshot(cfg, state)
+                if snapshot.get("connectivity_level") == "online":
+                    log(
+                        "WARN",
+                        "status_check_soft_failed",
+                        "wired status query said offline but connectivity is online",
+                    )
+                    message = "在线，已忽略一次有线状态误判"
+                    state["was_online"] = True
+                    next_sleep = online_interval
+                    if mode_msg:
+                        message = message + "；" + mode_msg
+                    return message, next_sleep
+
             if state["was_online"]:
                 log(
                     "WARN",
